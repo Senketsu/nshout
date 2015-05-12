@@ -10,65 +10,65 @@ elif defined(macosx):
  const LibName* = "libshout.dylib"
 
 const
-    SHOUTERR_SUCCESS* = (0)
-    SHOUTERR_INSANE* = (- 1)
-    SHOUTERR_NOCONNECT* = (- 2)
-    SHOUTERR_NOLOGIN* = (- 3)
-    SHOUTERR_SOCKET* = (- 4)
-    SHOUTERR_MALLOC* = (- 5)
-    SHOUTERR_METADATA* = (- 6)
-    SHOUTERR_CONNECTED* = (- 7)
-    SHOUTERR_UNCONNECTED* = (- 8)
-    SHOUTERR_UNSUPPORTED* = (- 9)
-    SHOUTERR_BUSY* = (- 10)
-    SHOUT_FORMAT_OGG* = (0)
-    SHOUT_FORMAT_MP3* = (1)
-    SHOUT_FORMAT_WEBM* = (2)
-    SHOUT_FORMAT_VORBIS* = SHOUT_FORMAT_OGG
-    SHOUT_PROTOCOL_HTTP* = (0)
-    SHOUT_PROTOCOL_XAUDIOCAST* = (1)
-    SHOUT_PROTOCOL_ICY* = (2)
-    SHOUT_AI_BITRATE* = "bitrate"
-    SHOUT_AI_SAMPLERATE* = "samplerate"
-    SHOUT_AI_CHANNELS* = "channels"
-    SHOUT_AI_QUALITY* = "quality"
-    LIBSHOUT_DEFAULT_HOST* = "localhost"
-    LIBSHOUT_DEFAULT_PORT* = 8000
-    LIBSHOUT_DEFAULT_FORMAT* = SHOUT_FORMAT_OGG
-    LIBSHOUT_DEFAULT_PROTOCOL* = SHOUT_PROTOCOL_HTTP
-    LIBSHOUT_DEFAULT_USER* = "source"
-    LIBSHOUT_DEFAULT_USERAGENT* = "libnshout/0.1"
-    SHOUT_BUFSIZE* = 4096
+  SHOUTERR_SUCCESS* = (0)
+  SHOUTERR_INSANE* = (- 1)
+  SHOUTERR_NOCONNECT* = (- 2)
+  SHOUTERR_NOLOGIN* = (- 3)
+  SHOUTERR_SOCKET* = (- 4)
+  SHOUTERR_MALLOC* = (- 5)
+  SHOUTERR_METADATA* = (- 6)
+  SHOUTERR_CONNECTED* = (- 7)
+  SHOUTERR_UNCONNECTED* = (- 8)
+  SHOUTERR_UNSUPPORTED* = (- 9)
+  SHOUTERR_BUSY* = (- 10)
+  SHOUT_FORMAT_OGG* = (0)
+  SHOUT_FORMAT_MP3* = (1)
+  SHOUT_FORMAT_WEBM* = (2)
+  SHOUT_FORMAT_VORBIS* = SHOUT_FORMAT_OGG
+  SHOUT_PROTOCOL_HTTP* = (0)
+  SHOUT_PROTOCOL_XAUDIOCAST* = (1)
+  SHOUT_PROTOCOL_ICY* = (2)
+  SHOUT_AI_BITRATE* = "bitrate"
+  SHOUT_AI_SAMPLERATE* = "samplerate"
+  SHOUT_AI_CHANNELS* = "channels"
+  SHOUT_AI_QUALITY* = "quality"
+  LIBSHOUT_DEFAULT_HOST* = "localhost"
+  LIBSHOUT_DEFAULT_PORT* = 8000
+  LIBSHOUT_DEFAULT_FORMAT* = SHOUT_FORMAT_OGG
+  LIBSHOUT_DEFAULT_PROTOCOL* = SHOUT_PROTOCOL_HTTP
+  LIBSHOUT_DEFAULT_USER* = "source"
+  LIBSHOUT_DEFAULT_USERAGENT* = "libnshout/0.1"
+  SHOUT_BUFSIZE* = 4096
 
 type
  sock_t* = int
- util_dict* = object
+ TShoutMeta* = object
   key*: cstring
   val*: cstring
-  next*: ptr util_dict
+  next*: ptr TShoutMeta
 
- shout_buf_t* = object
+ TShoutBuf* = object
   data*: array[SHOUT_BUFSIZE, cuchar]
   len*: cuint
   pos*: cuint
-  prev*: ptr shout_buf_t
-  next*: ptr shout_buf_t
+  prev*: ptr TShoutBuf
+  next*: ptr TShoutBuf
 
- shout_queue_t* = object
-  head*: ptr shout_buf_t
+ TShoutQueue* = object
+  head*: ptr TShoutBuf
   len*: csize
 
- shout_state_e* {.size: sizeof(cint).} = enum
+ TShoutState* {.size: sizeof(cint).} = enum
   SHOUT_STATE_UNCONNECTED = 0, SHOUT_STATE_CONNECT_PENDING,
   SHOUT_STATE_REQ_PENDING, SHOUT_STATE_RESP_PENDING, SHOUT_STATE_CONNECTED
 
- shout* = object
+ TShout* = object
   host*: cstring          # hostname or IP of icecast server
   port*: cint             # port of the icecast server
   password*: cstring      # login password for the server
   protocol*: cuint        # server protocol to use
   format*: cuint          # type of data being sent
-  audio_info*: util_dict # audio encoding parameters
+  audio_info*: TShoutMeta # audio encoding parameters
   useragent*: cstring     # user-agent to use when doing HTTP login
   mount*: cstring         # mountpoint for this stream
   name*: cstring          # name of the stream
@@ -78,21 +78,19 @@ type
   dumpfile*: cstring      # icecast 1.x dumpfile
   user*: cstring          # username to use for HTTP auth.
   public*: cint           # is this stream private?
-  socket*: sock_t         # socket the connection is on
-  state*: shout_state_e
+  socket*: cint          # socket the connection is on
+  state*: TShoutState
   nonblocking*: cint
   format_data*: pointer
-  send*: proc (self: ptr shout; buff: cstring; len: csize): int
-  close*: proc (self: ptr shout)
-  rqueue*: shout_queue_t
-  wqueue*: shout_queue_t
+  rqueue*: TShoutQueue
+  wqueue*: TShoutQueue
   starttime*: uint64      # start of this period's timeclock
   senttime*: uint64       # amout of data we've sent (in milliseconds)
   error*: cint
 
 type
-    shout_t* = ptr shout
-    shout_metadata_t* = ptr util_dict
+  PShout* = ptr TShout
+  PShoutMeta* = ptr TShoutMeta
 
 # initializes the shout library. Must be called before anything else
 proc shoutInit*()
@@ -108,159 +106,159 @@ proc shoutShutdown*()
 proc shoutVersion*(majon,minor,patch: int):cstring
   {.cdecl, dynlib: LibName, importc:"shout_version".}
 
-# Allocates and sets up a new shout_t.  Returns NULL if it can't get enough
-#  memory.  The returns shout_t must be disposed of with shout_free
-proc shoutNew*():shout_t
+# Allocates and sets up a new PShout.  Returns NULL if it can't get enough
+#  memory.  The returns PShout must be disposed of with shout_free
+proc shoutNew*():PShout
   {.cdecl, dynlib: LibName, importc:"shout_new".}
 
-# Free all memory allocated by a shout_t
-proc shoutFree*(self: shout_t)
+# Free all memory allocated by a PShout
+proc free*(self: PShout)
   {.cdecl, dynlib: LibName, importc:"shout_free".}
 
 # Returns a statically allocated string describing the last shout error
-#  to occur.  Only valid until the next libshout call on this shout_t
-proc getError*(self: shout_t): cstring
+#  to occur.  Only valid until the next libshout call on this PShout
+proc getError*(self: PShout): cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_error".}
 
 # Return the error code (e.g. SHOUTERR_SOCKET) for this shout instance
-proc getErrno*(self: shout_t): int
+proc getErrno*(self: PShout): int
   {.cdecl, dynlib: LibName, importc:"shout_get_errno".}
 
 # returns SHOUTERR_CONNECTED or SHOUTERR_UNCONNECTED
-proc getConnected*(self: shout_t): int
+proc getConnected*(self: PShout): int
   {.cdecl, dynlib: LibName, importc:"shout_get_connected".}
 
 # Parameter manipulation functions.  libshout makes copies of all parameters,
 #  the caller may free its copies after giving them to libshout.  May return
 #  SHOUTERR_MALLOC
-proc setHost*(self: shout_t,host: cstring):int
+proc setHost*(self: PShout,host: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_host".}
 
-proc getHost*(self: shout_t): cstring
+proc getHost*(self: PShout): cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_host".}
 
-proc setPort*(self: shout_t,port: cushort): int
+proc setPort*(self: PShout,port: cushort): int
   {.cdecl, dynlib: LibName, importc:"shout_set_port".}
 
-proc getPort*(self: shout_t):cushort
+proc getPort*(self: PShout):cushort
   {.cdecl, dynlib: LibName, importc:"shout_get_port".}
 
-proc setPassword*(self: shout_t,password: cstring): int
+proc setPassword*(self: PShout,password: cstring): int
   {.cdecl, dynlib: LibName, importc:"shout_set_password".}
 
-proc getPassword*(self: shout_t):cstring
+proc getPassword*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_password".}
 
-proc setMount*(self: shout_t, mount: cstring):int
+proc setMount*(self: PShout, mount: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_mount".}
 
-proc getMount*(self: shout_t):cstring
+proc getMount*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_mount".}
 
-proc setName*(self: shout_t, name: cstring):int
+proc setName*(self: PShout, name: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_name".}
 
-proc getName*(self: shout_t):cstring
+proc getName*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_name".}
 
-proc setUrl*(self: shout_t, url: cstring):int
+proc setUrl*(self: PShout, url: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_url".}
 
-proc getUrl*(self: shout_t):cstring
+proc getUrl*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_url".}
 
-proc setGenre*(self: shout_t, genre: cstring):int
+proc setGenre*(self: PShout, genre: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_genre".}
 
-proc getGenre*(self: shout_t):cstring
+proc getGenre*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_genre".}
 
-proc setUser*(self: shout_t, username: cstring):int
+proc setUser*(self: PShout, username: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_user".}
 
-proc getUser*(self: shout_t):cstring
+proc getUser*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_user".}
 
-proc setAgent*(self: shout_t, agent: cstring):int
+proc setAgent*(self: PShout, agent: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_agent".}
 
-proc getAgent*(self: shout_t):cstring
+proc getAgent*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_agent".}
 
-proc setDescription*(self: shout_t, description: cstring):int
+proc setDescription*(self: PShout, description: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_description".}
 
-proc getDescription*(self: shout_t):cstring
+proc getDescription*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_description".}
 
-proc setDumpfile*(self: shout_t, dumpfile: cstring):int
+proc setDumpfile*(self: PShout, dumpfile: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_dumpfile".}
 
-proc getDumpfile*(self: shout_t):cstring
+proc getDumpfile*(self: PShout):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_dumpfile".}
 
-proc setAudioInfo*(self: shout_t, name,value: cstring):int
+proc setAudioInfo*(self: PShout, name,value: cstring):int
   {.cdecl, dynlib: LibName, importc:"shout_set_audio_info".}
 
-proc getAudioInfo*(self: shout_t, name:cstring):cstring
+proc getAudioInfo*(self: PShout, name:cstring):cstring
   {.cdecl, dynlib: LibName, importc:"shout_get_audio_info".}
 
-proc setPublic*(self: shout_t, make_public: uint):int
+proc setPublic*(self: PShout, make_public: uint):int
   {.cdecl, dynlib: LibName, importc:"shout_set_public".}
 
-proc getPublic*(self: shout_t):uint
+proc getPublic*(self: PShout):uint
   {.cdecl, dynlib: LibName, importc:"shout_get_public".}
 
 # takes a SHOUT_FORMAT_xxxx argument
-proc setFormat*(self: shout_t, format: uint):int
+proc setFormat*(self: PShout, format: uint):int
   {.cdecl, dynlib: LibName, importc:"shout_set_format".}
 
-proc getFormat*(self: shout_t):uint
+proc getFormat*(self: PShout):uint
   {.cdecl, dynlib: LibName, importc:"shout_get_format".}
 
 # takes a SHOUT_PROTOCOL_xxxxx argument
-proc setProtocol*(self: shout_t, protocol: uint):int
+proc setProtocol*(self: PShout, protocol: uint):int
   {.cdecl, dynlib: LibName, importc:"shout_set_protocol".}
 
-proc getProtocol*(self: shout_t):uint
+proc getProtocol*(self: PShout):uint
   {.cdecl, dynlib: LibName, importc:"shout_get_protocol".}
 
 # Instructs libshout to use nonblocking I/O. Must be called before
 #  shout_open (no switching back and forth midstream at the moment).
-proc setNonblocking*(self: shout_t, nonblocking: uint):int
+proc setNonblocking*(self: PShout, nonblocking: uint):int
   {.cdecl, dynlib: LibName, importc:"shout_set_nonblocking".}
 
-proc getNonblocking*(self: shout_t):uint
+proc getNonblocking*(self: PShout):uint
   {.cdecl, dynlib: LibName, importc:"shout_get_nonblocking".}
 
 # Opens a connection to the server.  All parameters must already be set
-proc open*(self: shout_t):int
+proc open*(self: PShout):int
   {.cdecl, dynlib: LibName, importc:"shout_open".}
 
 # Closes a connection to the server
-proc close*(self: shout_t):int
+proc close*(self: PShout):int
   {.cdecl, dynlib: LibName, importc:"shout_close".}
 
 # Send data to the server, parsing it for format specific timing info
-proc send*(self: shout_t, data: cstring, len: csize):int
+proc send*(self: PShout, data: cstring, len: csize):int
   {.cdecl, dynlib: LibName, importc:"shout_send".}
 
 # Send unparsed data to the server.  Do not use this unless you know
 # what you are doing. Returns the number of bytes written, or < 0 on error.
-proc sendRaw*(self: shout_t, data: cstring, len: csize):csize
+proc sendRaw*(self: PShout, data: cstring, len: csize):csize
   {.cdecl, dynlib: LibName, importc:"shout_send_raw".}
 
 # return the number of bytes currently on the write queue (only makes sense in
 #  nonblocking mode).
-proc queueLen*(self: shout_t):csize
+proc queueLen*(self: PShout):csize
   {.cdecl, dynlib: LibName, importc:"shout_queuelen".}
 
 # Puts caller to sleep until it is time to send more data to the server
-proc sync*(self: shout_t)
+proc sync*(self: PShout)
   {.cdecl, dynlib: LibName, importc:"shout_sync".}
 
 # Amount of time in ms caller should wait before sending again
-proc delay*(self: shout_t):cint
+proc delay*(self: PShout):cint
   {.cdecl, dynlib: LibName, importc:"shout_delay".}
 
 # Sets MP3 metadata.
@@ -271,23 +269,23 @@ proc delay*(self: shout_t):cint
 # *   SHOUTERR_INSANE
 # *   SHOUTERR_NOCONNECT
 # *   SHOUTERR_SOCKET
-proc setMetadata*(self: shout_t, metadata: shout_metadata_t):cint
+proc setMetadata*(self: PShout, metadata: PShoutMeta):cint
   {.cdecl, dynlib: LibName, importc:"shout_set_metadata".}
 
 # Allocates a new metadata structure.  Must be freed by shout_metadata_free.
-proc metaDataNew*(): shout_metadata_t
+proc metadataNew*(): PShoutMeta
   {.cdecl, dynlib: LibName, importc:"shout_metadata_new".}
 
-# Free resources allocated by shout_metadata_t
-proc metaDataFree*(self: shout_metadata_t)
+# Free resources allocated by PShoutMeta
+proc free*(self: PShoutMeta)
   {.cdecl, dynlib: LibName, importc:"shout_metadata_free".}
 
 # Add a parameter to the metadata structure.
 # Returns:
 # *   SHOUTERR_SUCCESS on success
-# *   SHOUTERR_INSANE if self isn't a valid shout_metadata_t* or name is null
+# *   SHOUTERR_INSANE if self isn't a valid PShoutMeta* or name is null
 # *   SHOUTERR_MALLOC if memory can't be allocated
-proc add*(self: shout_metadata_t,name,value: cstring):cint
+proc add*(self: PShoutMeta,name,value: cstring):cint
   {.cdecl, dynlib: LibName, importc:"shout_metadata_add".}
 
 
